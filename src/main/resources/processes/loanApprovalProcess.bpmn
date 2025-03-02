@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL "
+             targetNamespace="http://example.com/bpmn">
+
+    <process id="loanApprovalProcess" name="Loan Approval Process" camunda:historyTimeToLive="P30D" isExecutable="true">
+        <startEvent id="start" name="Customer Submits Loan Request"/>
+        <sequenceFlow sourceRef="start" targetRef="checkCIC"/>
+
+        <serviceTask id="checkCIC" name="Check CIC Score" camunda:delegateExpression="${checkCICDelegate}"/>
+        <sequenceFlow sourceRef="checkCIC" targetRef="creditCheckGateway"/>
+
+        <exclusiveGateway id="creditCheckGateway"/>
+
+        <sequenceFlow sourceRef="creditCheckGateway" targetRef="rejectLoan">
+            <conditionExpression xsi:type="tFormalExpression">${cicApproved == false}</conditionExpression>
+        </sequenceFlow>
+        <serviceTask id="rejectLoan" name="Reject Loan" camunda:delegateExpression="${rejectLoanDelegate}"/>
+        <sequenceFlow sourceRef="rejectLoan" targetRef="end"/>
+
+        <sequenceFlow sourceRef="creditCheckGateway" targetRef="manualApproval">
+            <conditionExpression xsi:type="tFormalExpression">${cicApproved == true}</conditionExpression>
+        </sequenceFlow>
+        <userTask id="manualApproval" name="Manual Approval" camunda:assignee="loanOfficer"/>
+        <sequenceFlow sourceRef="manualApproval" targetRef="sendResult"/>
+
+        <serviceTask id="sendResult" name="Send Result" camunda:delegateExpression="${sendResultDelegate}"/>
+        <sequenceFlow sourceRef="sendResult" targetRef="end"/>
+
+        <endEvent id="end"/>
+    </process>
+</definitions>

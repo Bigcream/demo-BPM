@@ -29,6 +29,7 @@ jobs:
   build:
     needs: security-checks
     runs-on: ubuntu-latest
+    if: always()
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -46,6 +47,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    if: always()
     steps:
       - name: Deploy to Staging
         run: echo "Deploying application..."

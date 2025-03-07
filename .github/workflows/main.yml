@@ -1,0 +1,51 @@
+name: DevSecOps Pipeline
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  security-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run Static Code Analysis (SAST)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: 'p/default'
+
+      - name: Run Dependency Security Scan (SCA)
+        uses: snyk/actions/maven@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Run Secret Scanning
+        uses: gitleaks/gitleaks-action@v2
+
+  build:
+    needs: security-checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Build and Test
+        run: |
+          mvn clean install
+          mvn test
+
+      - name: Run Container Security Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'myapp:latest'
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Staging
+        run: echo "Deploying application..."

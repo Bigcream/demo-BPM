@@ -50,12 +50,27 @@ jobs:
       - name: Deploy to Staging
         run: echo "Deploying application..."
   notify-slack:
+    needs: [security-checks, build, deploy] # Chạy sau tất cả các job khác
     runs-on: ubuntu-latest
-    if: failure() # Luôn chạy bất kể job khác thành công hay thất bại
+    if: always() # Đảm bảo chạy ngay cả khi job khác thất bại
     steps:
-      - name: Send Slack Notification on Failure
-        if: failure() # Chỉ gửi thông báo khi có lỗi
+      - name: Send Slack Notification
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            STATUS="✅ Pipeline Succeeded! ✅"
+            COLOR="#36a64f"
+          else
+            STATUS="🚨 Pipeline Failed! 🚨"
+            COLOR="#ff0000"
+          fi
+
           curl -X POST -H 'Content-type: application/json' --data '{
-            "text": "🚨 Security Scan Failed! 🚨\n\n*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref }}\n*Commit:* ${{ github.sha }}\n*Triggered by:* ${{ github.actor }}\n\nPlease check the pipeline logs."
-          }' ${{ secrets.SLACK_WEBHOOK_URL }}
+            "attachments": [
+              {
+                "color": "'$COLOR'",
+                "text": "'$STATUS'\n\n*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref }}\n*Commit:* ${{ github.sha }}\n*Triggered by:* ${{ github.actor }}\n\nCheck the logs for details."
+              }
+            ]
+          }' $SLACK_WEBHOOK_URL

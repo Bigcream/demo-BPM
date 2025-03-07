@@ -49,3 +49,13 @@ jobs:
     steps:
       - name: Deploy to Staging
         run: echo "Deploying application..."
+  notify-slack:
+    needs: [security-checks, build, deploy]
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Send Slack Notification
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{
+            "text": "🚨 Security Scan Failed! 🚨\n\n*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref }}\n*Commit:* ${{ github.sha }}\n*Triggered by:* ${{ github.actor }}\n\nPlease check the pipeline logs."
+          }' ${{ secrets.SLACK_WEBHOOK_URL }}

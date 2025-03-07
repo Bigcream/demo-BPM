@@ -7,9 +7,7 @@ on:
     branches: [ master ]
 
 jobs:
-
   build:
-    needs: security-checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -26,49 +24,3 @@ jobs:
     steps:
       - name: Deploy to Staging
         run: echo "Deploying application..."
-
-  notify-slack:
-    needs: [security-checks, build, deploy] # Chạy sau tất cả các job khác
-    runs-on: ubuntu-latest
-    if: always() # Đảm bảo chạy ngay cả khi job khác thất bại
-    steps:
-      - name: Send Slack Notification
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          # Xác định trạng thái của từng job
-          SECURITY_STATUS="${{ needs.security-checks.result }}"
-          BUILD_STATUS="${{ needs.build.result }}"
-          DEPLOY_STATUS="${{ needs.deploy.result }}"
-
-          # Tạo thông báo chi tiết
-          DETAILS=""
-          if [ "$SECURITY_STATUS" == "failure" ]; then
-            DETAILS="$DETAILS\n- *Kiểm tra bảo mật*: Thất bại ❌"
-          fi
-          if [ "$BUILD_STATUS" == "failure" ]; then
-            DETAILS="$DETAILS\n- *Xây dựng và kiểm thử*: Thất bại ❌"
-          fi
-          if [ "$DEPLOY_STATUS" == "failure" ]; then
-            DETAILS="$DETAILS\n- *Triển khai*: Thất bại ❌"
-          fi
-
-          # Xác định trạng thái tổng thể
-          if [ "$SECURITY_STATUS" = "success" ] && [ "$BUILD_STATUS" = "success" ] && [ "$DEPLOY_STATUS" = "success" ]; then
-            STATUS="✅ Pipeline Thành Công! ✅"
-            COLOR="#36a64f"
-          else
-            STATUS="🚨 Pipeline Thất Bại! 🚨"
-            COLOR="#ff0000"
-          fi
-
-          # Gửi thông báo tới Slack
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{\"attachments\": [{\"color\": \"$COLOR\", \"text\": \"$STATUS\n\n*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref }}\n*Commit:* ${{ github.sha }}\n*Author:* ${{ github.actor }}\n\n*Chi tiết trạng thái:*$DETAILS\n\n[Kiểm tra nhật ký tại đây](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}]}" \
-            "$SLACK_WEBHOOK_URL"
-
-          # Kiểm tra lỗi curl
-          if [ $? -ne 0 ]; then
-            echo "Lỗi khi gửi thông báo tới Slack. Kiểm tra SLACK_WEBHOOK_URL."
-            exit 1
-          fi

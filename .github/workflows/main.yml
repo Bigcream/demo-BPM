@@ -58,19 +58,16 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            STATUS="✅ Pipeline Succeeded! ✅"
+          # Kiểm tra trạng thái job
+          if [ "${{ github.job_status }}" = "success" ]; then
+            STATUS="✅ Pipeline Thành Công! ✅"
             COLOR="#36a64f"
           else
-            STATUS="🚨 Pipeline Failed! 🚨"
+            STATUS="🚨 Pipeline Thất Bại! 🚨"
             COLOR="#ff0000"
           fi
-
-          curl -X POST -H 'Content-type: application/json' --data '{
-            "attachments": [
-              {
-                "color": "'$COLOR'",
-                "text": "'$STATUS'\n\n*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref }}\n*Commit:* ${{ github.sha }}\n*Triggered by:* ${{ github.actor }}\n\nCheck the logs for details."
-              }
-            ]
-          }' $SLACK_WEBHOOK_URL
+  
+          # Gửi thông báo tới Slack
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"attachments\": [{\"color\": \"$COLOR\", \"text\": \"$STATUS\n\n*Kho lưu trữ:* ${{ github.repository }}\n*Nhánh:* ${{ github.ref }}\n*Commit:* ${{ github.sha }}\n*Người kích hoạt:* ${{ github.actor }}\n\nKiểm tra nhật ký để biết chi tiết.\"}]}" \
+            "$SLACK_WEBHOOK_URL"

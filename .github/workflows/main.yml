@@ -29,7 +29,6 @@ jobs:
   build:
     needs: security-checks
     runs-on: ubuntu-latest
-    if: always()
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -47,7 +46,6 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    if: always()
     steps:
       - name: Deploy to Staging
         run: echo "Deploying application..."
@@ -68,20 +66,14 @@ jobs:
 
           # Tạo thông báo chi tiết
           DETAILS=""
-          if [ "$SECURITY_STATUS" != "success" ]; then
+          if [ "$SECURITY_STATUS" == "failure" ]; then
             DETAILS="$DETAILS\n- *Kiểm tra bảo mật*: Thất bại ❌"
-          else
-            DETAILS="$DETAILS\n- *Kiểm tra bảo mật*: Thành công ✅"
           fi
-          if [ "$BUILD_STATUS" != "success" ]; then
+          if [ "$BUILD_STATUS" == "failure" ]; then
             DETAILS="$DETAILS\n- *Xây dựng và kiểm thử*: Thất bại ❌"
-          else
-            DETAILS="$DETAILS\n- *Xây dựng và kiểm thử*: Thành công ✅"
           fi
-          if [ "$DEPLOY_STATUS" != "success" ]; then
+          if [ "$DEPLOY_STATUS" == "failure" ]; then
             DETAILS="$DETAILS\n- *Triển khai*: Thất bại ❌"
-          else
-            DETAILS="$DETAILS\n- *Triển khai*: Thành công ✅"
           fi
 
           # Xác định trạng thái tổng thể

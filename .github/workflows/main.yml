@@ -12,12 +12,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Run Static Code Analysis (SAST)
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: 'p/default'
-
+        
       - name: Add mvnw permissions
         run: |
           if [ -f ./mvnw ]; then
@@ -26,6 +21,11 @@ jobs:
           else
             echo "Không tìm thấy mvnw, sẽ sử dụng mvn thay thế"
           fi
+
+      - name: Run Static Code Analysis (SAST)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: 'p/default'
 
       - name: Run Dependency Security Scan (SCA)
         id: sca

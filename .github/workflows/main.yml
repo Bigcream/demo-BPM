@@ -51,7 +51,7 @@ jobs:
         run: echo "Deploying application..."
   notify-slack:
     runs-on: ubuntu-latest
-    if: always() # Luôn chạy bất kể job khác thành công hay thất bại
+    if: failure() # Luôn chạy bất kể job khác thành công hay thất bại
     steps:
       - name: Send Slack Notification on Failure
         if: failure() # Chỉ gửi thông báo khi có lỗi

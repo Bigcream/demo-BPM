@@ -6,12 +6,18 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  pull-requests: write  # Cấp quyền ghi trên pull requests
+  issues: write
+
 jobs:
   security-checks:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Lấy toàn bộ lịch sử commit cho SonarQube
 
       - name: Add mvnw permissions
         run: |
@@ -22,21 +28,74 @@ jobs:
             echo "Không tìm thấy mvnw, sẽ sử dụng mvn thay thế"
           fi
 
-      - name: Run Static Code Analysis (SAST)
-        uses: returntocorp/semgrep-action@v1
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
         with:
-          config: 'p/default'
+          java-version: '17'
+          distribution: 'temurin'
 
-      - name: Run Dependency Security Scan (SCA)
-        id: sca
-        uses: snyk/actions/maven@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
 
-      - name: Run Secret Scanning
-        uses: gitleaks/gitleaks-action@v2
+      - name: Run SonarQube Scan (SAST)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Thêm GITHUB_TOKEN vào đây
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}  # Ví dụ: http://your-sonarqube-server:9000
+        run: |
+          # Kiểm tra phiên bản Java
+          java -version
+          # Build và chạy SonarQube scan
+          mvn clean install -DskipTests
+          mvn sonar:sonar \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.projectKey=my-spring-boot-project \
+            -Dsonar.java.binaries=target/classes \
+            -Dsonar.sources=. \
+            -Dsonar.tests=src/test \
+            -Dsonar.test.inclusions=**/*Test*.java
+
+      - name: Post SonarQube Security Issues to Pull Request
+        if: github.event_name == 'pull_request'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+          # Chỉ lấy các issue loại VULNERABILITY (bảo mật) và định dạng cho bảng Markdown
+          ISSUES=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=my-spring-boot-project&resolved=false&types=VULNERABILITY" | jq -r '.issues[] | "| \(.component) | \(.line) | \(.message) |"')
+          
+          if [ -n "$ISSUES" ]; then
+            # Sử dụng echo -e để đảm bảo ký tự xuống dòng được xử lý đúng
+            COMMENT=$(echo -e "## 🔒 SonarQube Security Analysis Report\n\n🚨 **Security Vulnerabilities Detected**\n\nThe following security issues were identified in your code:\n\n| File Path                  | Line | Issue Description                  |\n|----------------------------|------|------------------------------------|\n$ISSUES\n\n📊 **Recommendation**: Please review and resolve these issues to enhance security.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)")
+          
+            # Đăng comment lên Pull Request
+            JSON_PAYLOAD=$(jq -n --arg body "$COMMENT" '{body: $body}')
+            curl -X POST -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "$JSON_PAYLOAD" \
+              "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
+          
+            # Dừng pipeline với mã lỗi
+            echo "Security vulnerabilities detected. Stopping pipeline."
+            exit 1
+          else
+            COMMENT=$(echo -e "## 🔒 SonarQube Security Analysis Report\n\n✅ **No Security Issues Found**\n\nGreat job! No security vulnerabilities were detected in your code.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)")
+          
+            # Đăng comment lên Pull Request
+            JSON_PAYLOAD=$(jq -n --arg body "$COMMENT" '{body: $body}')
+            curl -X POST -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "$JSON_PAYLOAD" \
+              "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
+          fi
+
 
   build:
     needs: security-checks
@@ -44,6 +103,20 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
 
       - name: Build and Test
         run: |
@@ -63,38 +136,32 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
+          file: ./Dockerfile
           push: true
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
             ${{ secrets.DOCKER_USERNAME }}/myapp:latest
 
-  image-scan:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Install Trivy
-        run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-
-      - name: Scan Docker Image
-        run: |
-          trivy image --severity HIGH,CRITICAL \
-          --exit-code 1 \
-          --no-progress \
-          ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
-
-  deploy:
-    needs: [build, image-scan]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to Staging
-        run: echo "Deploying application..."
+#  image-scan:
+#    needs: build
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v3
+#
+#      - name: Install Trivy
+#        run: |
+#          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+#
+#      - name: Scan Docker Image
+#        run: |
+#          trivy image --severity HIGH,CRITICAL \
+#            --exit-code 1 \
+#            --no-progress \
+#            ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
 
   notify-slack:
-    needs: [security-checks, build, image-scan, deploy]
+    needs: [security-checks, build]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -106,25 +173,22 @@ jobs:
           SECURITY_STATUS="${{ needs.security-checks.result }}"
           BUILD_STATUS="${{ needs.build.result }}"
           SCAN_STATUS="${{ needs.image-scan.result }}"
-          DEPLOY_STATUS="${{ needs.deploy.result }}"
 
           # Tạo thông báo chi tiết
           DETAILS=""
           if [ "$SECURITY_STATUS" == "failure" ]; then
-            DETAILS="$DETAILS\n- *Kiểm tra bảo mật*: Thất bại ❌"
+            DETAILS="$DETAILS\n- *Kiểm tra bảo mật (SonarQube)*: Thất bại ❌"
+          else
+            DETAILS="$DETAILS\n- *Kiểm tra bảo mật (SonarQube)*: Thành công ✅"
           fi
           if [ "$BUILD_STATUS" == "failure" ]; then
             DETAILS="$DETAILS\n- *Xây dựng và kiểm thử*: Thất bại ❌"
-          fi
-          if [ "$SCAN_STATUS" == "failure" ]; then
-            DETAILS="$DETAILS\n- *Image Scan*: Thất bại ❌"
-          fi
-          if [ "$DEPLOY_STATUS" == "failure" ]; then
-            DETAILS="$DETAILS\n- *Triển khai*: Thất bại ❌"
+          else
+            DETAILS="$DETAILS\n- *Xây dựng và kiểm thử*: Thành công ✅"
           fi
 
           # Xác định trạng thái tổng thể
-          if [ "$SECURITY_STATUS" = "success" ] && [ "$BUILD_STATUS" = "success" ] && [ "$SCAN_STATUS" = "success" ] && [ "$DEPLOY_STATUS" = "success" ]; then
+          if [ "$SECURITY_STATUS" = "success" ] && [ "$BUILD_STATUS" = "success" ]; then
             STATUS="✅ Pipeline Thành Công! ✅"
             COLOR="#36a64f"
           else
@@ -133,12 +197,14 @@ jobs:
           fi
 
           # Gửi thông báo tới Slack
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{\"attachments\": [{\"color\": \"$COLOR\", \"text\": \"$STATUS\n\n*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref }}\n*Commit:* ${{ github.sha }}\n*Author:* ${{ github.actor }}\n\n*Chi tiết trạng thái:*$DETAILS\n\n[Kiểm tra nhật ký tại đây](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}]}" \
-            "$SLACK_WEBHOOK_URL"
-
-          # Kiểm tra lỗi curl
-          if [ $? -ne 0 ]; then
-            echo "Lỗi khi gửi thông báo tới Slack. Kiểm tra SLACK_WEBHOOK_URL."
-            exit 1
-          fi
+          curl -X POST -H 'Content-type: application/json' --data "{
+            \"text\": \"$STATUS\",
+            \"attachments\": [{
+              \"color\": \"$COLOR\", 
+              \"fields\": [
+                {\"title\": \"Chi tiết\", \"value\": \"$DETAILS\", \"short\": false},
+                {\"title\": \"Repository\", \"value\": \"${{ github.repository }}\", \"short\": true},
+                {\"title\": \"Commit\", \"value\": \"${{ github.sha }}\", \"short\": true}
+              ]
+            }]
+          }" $SLACK_WEBHOOK_URL

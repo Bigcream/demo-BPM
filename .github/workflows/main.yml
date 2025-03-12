@@ -7,6 +7,34 @@ on:
     branches: [ master ]
 
 jobs:
+  security-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Add mvnw permissions
+        run: |
+          if [ -f ./mvnw ]; then
+            chmod +x ./mvnw
+            echo "Đã cấp quyền thực thi cho mvnw"
+          else
+            echo "Không tìm thấy mvnw, sẽ sử dụng mvn thay thế"
+          fi
+
+      - name: Run Static Code Analysis (SAST)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: 'p/default'
+
+      - name: Run Dependency Security Scan (SCA)
+        id: sca
+        uses: snyk/actions/maven@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Run Secret Scanning
+        uses: gitleaks/gitleaks-action@v2
 
   build:
     needs: security-checks
@@ -20,17 +48,53 @@ jobs:
           mvn clean install
           mvn test
 
-  deploy:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/myapp:latest
+
+  image-scan:
     needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Scan Docker Image
+        run: |
+          trivy image --severity HIGH,CRITICAL \
+          --exit-code 1 \
+          --no-progress \
+          ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
+
+  deploy:
+    needs: [build, image-scan]
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to Staging
         run: echo "Deploying application..."
 
   notify-slack:
-    needs: [security-checks, build, deploy] # Chạy sau tất cả các job khác
+    needs: [security-checks, build, image-scan, deploy]
     runs-on: ubuntu-latest
-    if: always() # Đảm bảo chạy ngay cả khi job khác thất bại
+    if: always()
     steps:
       - name: Send Slack Notification
         env:
@@ -39,6 +103,7 @@ jobs:
           # Xác định trạng thái của từng job
           SECURITY_STATUS="${{ needs.security-checks.result }}"
           BUILD_STATUS="${{ needs.build.result }}"
+          SCAN_STATUS="${{ needs.image-scan.result }}"
           DEPLOY_STATUS="${{ needs.deploy.result }}"
 
           # Tạo thông báo chi tiết
@@ -49,12 +114,15 @@ jobs:
           if [ "$BUILD_STATUS" == "failure" ]; then
             DETAILS="$DETAILS\n- *Xây dựng và kiểm thử*: Thất bại ❌"
           fi
+          if [ "$SCAN_STATUS" == "failure" ]; then
+            DETAILS="$DETAILS\n- *Image Scan*: Thất bại ❌"
+          fi
           if [ "$DEPLOY_STATUS" == "failure" ]; then
             DETAILS="$DETAILS\n- *Triển khai*: Thất bại ❌"
           fi
 
           # Xác định trạng thái tổng thể
-          if [ "$SECURITY_STATUS" = "success" ] && [ "$BUILD_STATUS" = "success" ] && [ "$DEPLOY_STATUS" = "success" ]; then
+          if [ "$SECURITY_STATUS" = "success" ] && [ "$BUILD_STATUS" = "success" ] && [ "$SCAN_STATUS" = "success" ] && [ "$DEPLOY_STATUS" = "success" ]; then
             STATUS="✅ Pipeline Thành Công! ✅"
             COLOR="#36a64f"
           else

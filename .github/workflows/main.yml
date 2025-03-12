@@ -86,15 +86,8 @@ jobs:
           --no-progress \
           ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
 
-  deploy:
-    needs: [build, image-scan]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to Staging
-        run: echo "Deploying application..."
-
   notify-slack:
-    needs: [security-checks, build, image-scan, deploy]
+    needs: [security-checks, build, image-scan]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -106,7 +99,6 @@ jobs:
           SECURITY_STATUS="${{ needs.security-checks.result }}"
           BUILD_STATUS="${{ needs.build.result }}"
           SCAN_STATUS="${{ needs.image-scan.result }}"
-          DEPLOY_STATUS="${{ needs.deploy.result }}"
 
           # Tạo thông báo chi tiết
           DETAILS=""
@@ -119,12 +111,9 @@ jobs:
           if [ "$SCAN_STATUS" == "failure" ]; then
             DETAILS="$DETAILS\n- *Image Scan*: Thất bại ❌"
           fi
-          if [ "$DEPLOY_STATUS" == "failure" ]; then
-            DETAILS="$DETAILS\n- *Triển khai*: Thất bại ❌"
-          fi
 
           # Xác định trạng thái tổng thể
-          if [ "$SECURITY_STATUS" = "success" ] && [ "$BUILD_STATUS" = "success" ] && [ "$SCAN_STATUS" = "success" ] && [ "$DEPLOY_STATUS" = "success" ]; then
+          if [ "$SECURITY_STATUS" = "success" ] && [ "$BUILD_STATUS" = "success" ] && [ "$SCAN_STATUS" = "success" ]; then
             STATUS="✅ Pipeline Thành Công! ✅"
             COLOR="#36a64f"
           else

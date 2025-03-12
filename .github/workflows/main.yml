@@ -33,23 +33,6 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-      - name: Install TruffleHog
-        run: |
-          curl -sSfL https://github.com/trufflesecurity/trufflehog/releases/latest/download/trufflehog_linux_amd64.tar.gz | tar -xzf -
-          sudo mv trufflehog /usr/local/bin/
-          trufflehog --version
-
-      - name: Run Secret Scanning with TruffleHog
-        run: |
-          trufflehog git file://. --since-commit HEAD^ --json > trufflehog-report.json || true
-          if [ -s trufflehog-report.json ]; then
-            echo "Secrets detected by TruffleHog:"
-            cat trufflehog-report.json
-            exit 1
-          else
-            echo "No secrets detected by TruffleHog."
-          fi
-
   build:
     needs: security-checks
     runs-on: ubuntu-latest

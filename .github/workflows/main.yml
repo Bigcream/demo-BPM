@@ -68,23 +68,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           sudo apt-get update && sudo apt-get install -y jq
-          # Chỉ lấy các issue loại VULNERABILITY (bảo mật)
+          # Chỉ lấy các issue loại VULNERABILITY (bảo mật) và định dạng cho bảng Markdown
           ISSUES=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=my-spring-boot-project&resolved=false&types=VULNERABILITY" | jq -r '.issues[] | "| \(.component) | \(.line) | \(.message) |"')
           
           if [ -n "$ISSUES" ]; then
-            COMMENT="## 🔒 SonarQube Security Analysis Report
-            🚨 **Security Vulnerabilities Detected**
-            The following security issues were identified in your code: | File Path | Line | Issue Description                  
-            |----------------------------|------|------------------------------------|
-            $ISSUES
-            📊 **Recommendation**: Please review and resolve these issues to enhance security. Consider using environment variables or a secrets manager for sensitive data. 
-            🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
+            # Sử dụng echo -e để đảm bảo ký tự xuống dòng được xử lý đúng
+            COMMENT=$(echo -e "## 🔒 SonarQube Security Analysis Report\n\n🚨 **Security Vulnerabilities Detected**\n\nThe following security issues were identified in your code:\n\n| File Path                  | Line | Issue Description                  |\n|----------------------------|------|------------------------------------|\n$ISSUES\n\n📊 **Recommendation**: Please review and resolve these issues to enhance security. Consider using environment variables or a secrets manager for sensitive data.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)")
           else
-            COMMENT="## 🔒 SonarQube Security Analysis Report
-            ✅ **No Security Issues Found**\n\nGreat job! No security vulnerabilities were detected in your code.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
+            COMMENT=$(echo -e "## 🔒 SonarQube Security Analysis Report\n\n✅ **No Security Issues Found**\n\nGreat job! No security vulnerabilities were detected in your code.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)")
           fi
           
-          # Sử dụng jq để tạo JSON an toàn
+          # Sử dụng jq để tạo JSON an toàn, đảm bảo xuống dòng được giữ nguyên
           JSON_PAYLOAD=$(jq -n --arg body "$COMMENT" '{body: $body}')
           curl -X POST -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \

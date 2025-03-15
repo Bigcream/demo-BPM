@@ -73,7 +73,7 @@ jobs:
           
           if [ -n "$ISSUES" ]; then
             # Sử dụng echo -e để đảm bảo ký tự xuống dòng được xử lý đúng
-            COMMENT=$(echo -e "## 🔒 SonarQube Security Analysis Report\n\n🚨 **Security Vulnerabilities Detected**\n\nThe following security issues were identified in your code:\n\n| File Path                  | Line | Issue Description                  |\n|----------------------------|------|------------------------------------|\n$ISSUES\n\n📊 **Recommendation**: Please review and resolve these issues to enhance security. Consider using environment variables or a secrets manager for sensitive data.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)")
+            COMMENT=$(echo -e "## 🔒 SonarQube Security Analysis Report\n\n🚨 **Security Vulnerabilities Detected**\n$ISSUES\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)")
           else
             COMMENT=$(echo -e "## 🔒 SonarQube Security Analysis Report\n\n✅ **No Security Issues Found**\n\nGreat job! No security vulnerabilities were detected in your code.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)")
           fi

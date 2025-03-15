@@ -18,6 +18,7 @@ public class LoanApprovalController {
 
     @PostMapping("/apply")
     public ResponseEntity<String> startLoanApprovalProcess() {
+        System.out.println("test");
         ProcessInstance processInstance = runtimeService.startProcessInstanceByKey("loanApprovalProcess");
         return ResponseEntity.ok("Loan Approval Process Started: " + processInstance.getId());
     }

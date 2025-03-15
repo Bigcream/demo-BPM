@@ -8,6 +8,7 @@ class DemoBmpApplicationTests {
 
 	@Test
 	void contextLoads() {
+		System.out.println("success");
 	}
 
 }

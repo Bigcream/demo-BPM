@@ -60,7 +60,7 @@ jobs:
             -Dsonar.tests=src/test \
             -Dsonar.test.inclusions=**/*Test*.java
 
-      - name: Post SonarQube Issues to Pull Request
+      - name: Post SonarQube Security Issues to Pull Request
         if: github.event_name == 'pull_request'
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -68,12 +68,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           sudo apt-get update && sudo apt-get install -y jq
-          ISSUES=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=my-spring-boot-project&resolved=false&types=VULNERABILITY,BUG,CODE_SMELL" | jq -r '.issues[] | "- **\(.component):\(.line)**: \(.message)"')
+          # Chỉ lấy các issue loại VULNERABILITY (bảo mật)
+          ISSUES=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=my-spring-boot-project&resolved=false&types=VULNERABILITY" | jq -r '.issues[] | "- **\(.component):\(.line)**: \(.message)"')
           
           if [ -n "$ISSUES" ]; then
-            COMMENT="### SonarQube Analysis Results\nFound the following issues:\n$ISSUES\n\n🔗 [View on SonarQube]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
+            COMMENT="### SonarQube Security Analysis Results\nFound the following security issues:\n$ISSUES\n\n🔗 [View on SonarQube]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
           else
-            COMMENT="### SonarQube Analysis Results\nNo issues found. Good job! ✅\n\n🔗 [View on SonarQube]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
+            COMMENT="### SonarQube Security Analysis Results\nNo security issues found. Good job! ✅\n\n🔗 [View on SonarQube]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
           fi
           
           # Sử dụng jq để tạo JSON an toàn
@@ -82,7 +83,6 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -d "$JSON_PAYLOAD" \
             "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
-
       - name: Check SonarQube Quality Gate
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

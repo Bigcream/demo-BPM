@@ -84,17 +84,8 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -d "$JSON_PAYLOAD" \
             "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
-      - name: Check SonarQube Quality Gate
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: |
-          # Chờ Quality Gate hoàn tất và kiểm tra trạng thái
-          sleep 10  # Chờ một khoảng thời gian để SonarQube xử lý (có thể điều chỉnh)
-          QUALITY_GATE_STATUS=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=my-spring-boot-project" | jq -r '.projectStatus.status')
-          echo "Quality Gate Status: $QUALITY_GATE_STATUS"
-          if [ "$QUALITY_GATE_STATUS" != "OK" ]; then
-            echo "Quality Gate failed: $QUALITY_GATE_STATUS"
+          if [ -n "$ISSUES" ]; then
+            echo "SonarQube Security Analysis Error"
             exit 1
           fi
 

@@ -42,11 +42,10 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}  # Ví dụ: http://your-sonarqube-server:9000
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Token mặc định của GitHub để gửi comment
         run: |
           # Kiểm tra phiên bản Java
           java -version
-          # Build và chạy SonarQube scan với tham số dòng lệnh cho Pull Request
+          # Build và chạy SonarQube scan
           mvn clean install -DskipTests
           mvn sonar:sonar \
             -Dsonar.host.url=$SONAR_HOST_URL \
@@ -55,13 +54,7 @@ jobs:
             -Dsonar.java.binaries=target/classes \
             -Dsonar.sources=. \
             -Dsonar.tests=src/test \
-            -Dsonar.test.inclusions=**/*Test*.java \
-            -Dsonar.pullrequest.key=${{ github.event.pull_request.number }} \
-            -Dsonar.pullrequest.branch=${{ github.head_ref }} \
-            -Dsonar.pullrequest.base=${{ github.base_ref }} \
-            -Dsonar.pullrequest.github.repository=${{ github.repository }} \
-            -Dsonar.pullrequest.provider=GitHub \
-            -Dsonar.pullrequest.github.endpoint=https://api.github.com
+            -Dsonar.test.inclusions=**/*Test*.java
 
       - name: Check SonarQube Quality Gate
         env:
@@ -69,12 +62,39 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
           # Chờ Quality Gate hoàn tất và kiểm tra trạng thái
-          sleep 30  # Chờ một khoảng thời gian để SonarQube xử lý (có thể cần điều chỉnh)
-          QUALITY_GATE_STATUS=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=my-spring-boot-project&pullRequest=${{ github.event.pull_request.number }}" | jq -r '.projectStatus.status')
+          sleep 10  # Chờ một khoảng thời gian để SonarQube xử lý (có thể điều chỉnh)
+          QUALITY_GATE_STATUS=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=my-spring-boot-project" | jq -r '.projectStatus.status')
           echo "Quality Gate Status: $QUALITY_GATE_STATUS"
           if [ "$QUALITY_GATE_STATUS" != "OK" ]; then
             echo "Quality Gate failed: $QUALITY_GATE_STATUS"
             exit 1
+          fi
+
+      - name: Post SonarQube Issues to Pull Request
+        if: github.event_name == 'pull_request'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Cài đặt jq để xử lý JSON
+          sudo apt-get update && sudo apt-get install -y jq
+          # Lấy danh sách issues từ SonarQube
+          ISSUES=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=my-spring-boot-project&resolved=false&types=VULNERABILITY,BUG,CODE_SMELL" | jq -r '.issues[] | "- **\(.component):\(.line)**: \(.message)"')
+          
+          # Nếu có issues, gửi bình luận lên Pull Request
+          if [ -n "$ISSUES" ]; then
+            COMMENT="### SonarQube Analysis Results\nFound the following issues:\n$ISSUES\n\n🔗 [View on SonarQube]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
+            curl -X POST -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"body\": \"$COMMENT\"}" \
+              "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
+          else
+            COMMENT="### SonarQube Analysis Results\nNo issues found. Good job! ✅\n\n🔗 [View on SonarQube]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
+            curl -X POST -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"body\": \"$COMMENT\"}" \
+              "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
           fi
 
   build:
@@ -136,9 +156,9 @@ jobs:
       - name: Scan Docker Image
         run: |
           trivy image --severity HIGH,CRITICAL \
-          --exit-code 1 \
-          --no-progress \
-          ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
+            --exit-code 1 \
+            --no-progress \
+            ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
 
   notify-slack:
     needs: [security-checks, build, image-scan]
@@ -158,12 +178,18 @@ jobs:
           DETAILS=""
           if [ "$SECURITY_STATUS" == "failure" ]; then
             DETAILS="$DETAILS\n- *Kiểm tra bảo mật (SonarQube)*: Thất bại ❌"
+          else
+            DETAILS="$DETAILS\n- *Kiểm tra bảo mật (SonarQube)*: Thành công ✅"
           fi
           if [ "$BUILD_STATUS" == "failure" ]; then
             DETAILS="$DETAILS\n- *Xây dựng và kiểm thử*: Thất bại ❌"
+          else
+            DETAILS="$DETAILS\n- *Xây dựng và kiểm thử*: Thành công ✅"
           fi
           if [ "$SCAN_STATUS" == "failure" ]; then
-            DETAILS="$DETAILS\n- *Image Scan*: Thất bại ❌"
+            DETAILS="$DETAILS\n- *Image Scan (Trivy)*: Thất bại ❌"
+          else
+            DETAILS="$DETAILS\n- *Image Scan (Trivy)*: Thành công ✅"
           fi
 
           # Xác định trạng thái tổng thể
@@ -181,7 +207,9 @@ jobs:
             \"attachments\": [{
               \"color\": \"$COLOR\", 
               \"fields\": [
-                {\"title\": \"Chi tiết\", \"value\": \"$DETAILS\", \"short\": false}
+                {\"title\": \"Chi tiết\", \"value\": \"$DETAILS\", \"short\": false},
+                {\"title\": \"Repository\", \"value\": \"${{ github.repository }}\", \"short\": true},
+                {\"title\": \"Commit\", \"value\": \"${{ github.sha }}\", \"short\": true}
               ]
             }]
           }" $SLACK_WEBHOOK_URL

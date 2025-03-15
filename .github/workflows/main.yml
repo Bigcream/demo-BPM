@@ -67,25 +67,21 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Cài đặt jq để xử lý JSON
           sudo apt-get update && sudo apt-get install -y jq
-          # Lấy danh sách issues từ SonarQube
           ISSUES=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=my-spring-boot-project&resolved=false&types=VULNERABILITY,BUG,CODE_SMELL" | jq -r '.issues[] | "- **\(.component):\(.line)**: \(.message)"')
           
-          # Nếu có issues, gửi bình luận lên Pull Request
           if [ -n "$ISSUES" ]; then
             COMMENT="### SonarQube Analysis Results\nFound the following issues:\n$ISSUES\n\n🔗 [View on SonarQube]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
-            curl -X POST -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "{\"body\": \"$COMMENT\"}" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
           else
             COMMENT="### SonarQube Analysis Results\nNo issues found. Good job! ✅\n\n🔗 [View on SonarQube]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
-            curl -X POST -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "{\"body\": \"$COMMENT\"}" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
           fi
+          
+          # Sử dụng jq để tạo JSON an toàn
+          JSON_PAYLOAD=$(jq -n --arg body "$COMMENT" '{body: $body}')
+          curl -X POST -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d "$JSON_PAYLOAD" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
 
       - name: Check SonarQube Quality Gate
         env:

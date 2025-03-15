@@ -1,7 +1,14 @@
-FROM maven:3.6.0-jdk-8-slim AS build
+# Giai đoạn build
+FROM maven:3.9.6-openjdk-17 AS build
 WORKDIR /chat-service
 COPY .mvn/ .mvn
 COPY pom.xml ./
-RUN mvn clean install -DskipTests
 COPY src ./src
-CMD ["mvn", "spring-boot:run"]
+RUN mvn clean install -DskipTests
+
+# Giai đoạn runtime
+FROM openjdk:17-jdk-slim
+WORKDIR /chat-service
+COPY --from=build /chat-service/target/*.jar app.jar
+EXPOSE 8080
+CMD ["java", "-jar", "app.jar"]

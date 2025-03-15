@@ -42,10 +42,11 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}  # Ví dụ: http://your-sonarqube-server:9000
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Token mặc định của GitHub để gửi comment
         run: |
           # Kiểm tra phiên bản Java
           java -version
-          # Build và chạy SonarQube scan với tham số dòng lệnh
+          # Build và chạy SonarQube scan với tham số dòng lệnh cho Pull Request
           mvn clean install -DskipTests
           mvn sonar:sonar \
             -Dsonar.host.url=$SONAR_HOST_URL \
@@ -54,13 +55,27 @@ jobs:
             -Dsonar.java.binaries=target/classes \
             -Dsonar.sources=. \
             -Dsonar.tests=src/test \
-            -Dsonar.test.inclusions=**/*Test*.java
+            -Dsonar.test.inclusions=**/*Test*.java \
+            -Dsonar.pullrequest.key=${{ github.event.pull_request.number }} \
+            -Dsonar.pullrequest.branch=${{ github.head_ref }} \
+            -Dsonar.pullrequest.base=${{ github.base_ref }} \
+            -Dsonar.pullrequest.github.repository=${{ github.repository }} \
+            -Dsonar.pullrequest.provider=GitHub \
+            -Dsonar.pullrequest.github.endpoint=https://api.github.com
 
-  #      - name: Run Dependency Security Scan (SCA)
-  #        id: sca
-  #        uses: snyk/actions/maven@master
-  #        env:
-  #          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      - name: Check SonarQube Quality Gate
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          # Chờ Quality Gate hoàn tất và kiểm tra trạng thái
+          sleep 30  # Chờ một khoảng thời gian để SonarQube xử lý (có thể cần điều chỉnh)
+          QUALITY_GATE_STATUS=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=my-spring-boot-project&pullRequest=${{ github.event.pull_request.number }}" | jq -r '.projectStatus.status')
+          echo "Quality Gate Status: $QUALITY_GATE_STATUS"
+          if [ "$QUALITY_GATE_STATUS" != "OK" ]; then
+            echo "Quality Gate failed: $QUALITY_GATE_STATUS"
+            exit 1
+          fi
 
   build:
     needs: security-checks
@@ -160,4 +175,13 @@ jobs:
             COLOR="#ff0000"
           fi
 
-          # Gửi thông báo tới Slac
+          # Gửi thông báo tới Slack
+          curl -X POST -H 'Content-type: application/json' --data "{
+            \"text\": \"$STATUS\",
+            \"attachments\": [{
+              \"color\": \"$COLOR\", 
+              \"fields\": [
+                {\"title\": \"Chi tiết\", \"value\": \"$DETAILS\", \"short\": false}
+              ]
+            }]
+          }" $SLACK_WEBHOOK_URL

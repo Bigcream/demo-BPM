@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Lấy toàn bộ lịch sử commit cho SonarQube
 
       - name: Add mvnw permissions
         run: |
@@ -22,16 +24,47 @@ jobs:
             echo "Không tìm thấy mvnw, sẽ sử dụng mvn thay thế"
           fi
 
-      - name: Run Static Code Analysis (SAST)
-        uses: returntocorp/semgrep-action@v1
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
         with:
-          config: 'p/default'
+          java-version: '17'
+          distribution: 'temurin'
 
-#      - name: Run Dependency Security Scan (SCA)
-#        id: sca
-#        uses: snyk/actions/maven@master
-#        env:
-#          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Run SonarQube Scan (SAST)
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}  # Ví dụ: http://your-sonarqube-server:9000
+        run: |
+          # Tải và cài đặt SonarScanner
+          curl -sSL https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip -o sonar-scanner.zip
+          unzip -o sonar-scanner.zip
+          export PATH=$PWD/sonar-scanner-4.8.0.2856-linux/bin:$PATH
+          # Build trước để tạo file biên dịch cho SonarQube
+          mvn clean install -DskipTests
+          # Chạy SonarScanner
+          sonar-scanner \
+            -Dsonar.projectKey=my-spring-boot-project \
+            -Dsonar.organization=my-org \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.java.binaries=target/classes \
+            -Dsonar.sources=. \
+            -Dsonar.tests=src/test \
+            -Dsonar.test.inclusions=**/*Test*.java
+
+  #      - name: Run Dependency Security Scan (SCA)
+  #        id: sca
+  #        uses: snyk/actions/maven@master
+  #        env:
+  #          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
   build:
     needs: security-checks
@@ -39,6 +72,20 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
 
       - name: Build and Test
         run: |
@@ -99,7 +146,7 @@ jobs:
           # Tạo thông báo chi tiết
           DETAILS=""
           if [ "$SECURITY_STATUS" == "failure" ]; then
-            DETAILS="$DETAILS\n- *Kiểm tra bảo mật*: Thất bại ❌"
+            DETAILS="$DETAILS\n- *Kiểm tra bảo mật (SonarQube)*: Thất bại ❌"
           fi
           if [ "$BUILD_STATUS" == "failure" ]; then
             DETAILS="$DETAILS\n- *Xây dựng và kiểm thử*: Thất bại ❌"

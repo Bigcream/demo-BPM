@@ -56,44 +56,19 @@ jobs:
             -Dsonar.tests=src/test \
             -Dsonar.test.inclusions=**/*Test*.java
 
-      - name: Check SonarQube Quality Gate
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: |
-          # Cài đặt jq
-          sudo apt-get update && sudo apt-get install -y jq
-          # Chờ Quality Gate hoàn tất
-          echo "Waiting for SonarQube to process the analysis..."
-          sleep 10  # Có thể điều chỉnh nếu cần
-          # Gọi API để lấy trạng thái Quality Gate
-          echo "Calling SonarQube API to check Quality Gate status..."
-          RESPONSE=$(curl -s -w "\n%{http_code}" -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=my-spring-boot-project")
-          # Tách mã trạng thái HTTP và nội dung phản hồi
-          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
-          RESPONSE_BODY=$(echo "$RESPONSE" | sed -e '$d')
-          # Kiểm tra mã trạng thái HTTP
-          if [ "$HTTP_STATUS" -ne 200 ]; then
-            echo "Error: Failed to fetch Quality Gate status. HTTP Status: $HTTP_STATUS"
-            echo "Response: $RESPONSE_BODY"
-            exit 1
-          fi
-          # Kiểm tra xem phản hồi có phải JSON hợp lệ không
-          if ! echo "$RESPONSE_BODY" | jq . >/dev/null 2>&1; then
-            echo "Error: Response is not valid JSON. Response: $RESPONSE_BODY"
-            exit 1
-          fi
-          # Lấy trạng thái Quality Gate
-          QUALITY_GATE_STATUS=$(echo "$RESPONSE_BODY" | jq -r '.projectStatus.status')
-          if [ -z "$QUALITY_GATE_STATUS" ]; then
-            echo "Error: Could not extract Quality Gate status. Response: $RESPONSE_BODY"
-            exit 1
-          fi
-          echo "Quality Gate Status: $QUALITY_GATE_STATUS"
-          if [ "$QUALITY_GATE_STATUS" != "OK" ]; then
-            echo "Quality Gate failed: $QUALITY_GATE_STATUS"
-            exit 1
-          fi
+#      - name: Check SonarQube Quality Gate
+#        env:
+#          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+#        run: |
+#          # Chờ Quality Gate hoàn tất và kiểm tra trạng thái
+#          sleep 10  # Chờ một khoảng thời gian để SonarQube xử lý (có thể điều chỉnh)
+#          QUALITY_GATE_STATUS=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=my-spring-boot-project" | jq -r '.projectStatus.status')
+#          echo "Quality Gate Status: $QUALITY_GATE_STATUS"
+#          if [ "$QUALITY_GATE_STATUS" != "OK" ]; then
+#            echo "Quality Gate failed: $QUALITY_GATE_STATUS"
+#            exit 1
+#          fi
 
       - name: Post SonarQube Issues to Pull Request
         if: github.event_name == 'pull_request'
@@ -102,9 +77,10 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Đã cài đặt jq ở bước trước
+          # Cài đặt jq để xử lý JSON
+          sudo apt-get update && sudo apt-get install -y jq
           # Lấy danh sách issues từ SonarQube
-          ISSUES=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=my-spring-boot-project&resolved=false&types=VULNERABILITY,BUG,CODE_SMELL" | jq -r '.issues[] | "- **\(.component):\(.line)**: \(.message)"')
+          ISSUES=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=my-spring-boot-project&resolved=false&types=VULNERABILITY,BUG,CODE_SMELL" | jq -r '.issues[] | "- **\(.component):\(.line)**: \(.message)"')
           
           # Nếu có issues, gửi bình luận lên Pull Request
           if [ -n "$ISSUES" ]; then

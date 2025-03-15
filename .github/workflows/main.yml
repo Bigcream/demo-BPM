@@ -43,18 +43,14 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}  # Ví dụ: http://your-sonarqube-server:9000
         run: |
-          # Tải và cài đặt SonarScanner
-          curl -sSL https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip -o sonar-scanner.zip
-          unzip -o sonar-scanner.zip
-          export PATH=$PWD/sonar-scanner-4.8.0.2856-linux/bin:$PATH
-          # Build trước để tạo file biên dịch cho SonarQube
+          # Kiểm tra phiên bản Java
+          java -version
+          # Build và chạy SonarQube scan với tham số dòng lệnh
           mvn clean install -DskipTests
-          # Chạy SonarScanner
-          sonar-scanner \
-            -Dsonar.projectKey=my-spring-boot-project \
-            -Dsonar.organization=my-org \
+          mvn sonar:sonar \
             -Dsonar.host.url=$SONAR_HOST_URL \
             -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.projectKey=my-spring-boot-project \
             -Dsonar.java.binaries=target/classes \
             -Dsonar.sources=. \
             -Dsonar.tests=src/test \
@@ -164,13 +160,4 @@ jobs:
             COLOR="#ff0000"
           fi
 
-          # Gửi thông báo tới Slack
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{\"attachments\": [{\"color\": \"$COLOR\", \"text\": \"$STATUS\n\n*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref }}\n*Commit:* ${{ github.sha }}\n*Author:* ${{ github.actor }}\n\n*Chi tiết trạng thái:*$DETAILS\n\n[Kiểm tra nhật ký tại đây](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}]}" \
-            "$SLACK_WEBHOOK_URL"
-
-          # Kiểm tra lỗi curl
-          if [ $? -ne 0 ]; then
-            echo "Lỗi khi gửi thông báo tới Slack. Kiểm tra SLACK_WEBHOOK_URL."
-            exit 1
-          fi
+          # Gửi thông báo tới Slac

@@ -69,12 +69,13 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y jq
           # Chỉ lấy các issue loại VULNERABILITY (bảo mật)
-          ISSUES=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=my-spring-boot-project&resolved=false&types=VULNERABILITY" | jq -r '.issues[] | "- **\(.component):\(.line)**: \(.message)"')
+          ISSUES=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=my-spring-boot-project&resolved=false&types=VULNERABILITY" | jq -r '.issues[] | "| \(.component) | \(.line) | \(.message) |"')
           
           if [ -n "$ISSUES" ]; then
-            COMMENT="### SonarQube Security Analysis Results\nFound the following security issues:\n$ISSUES\n\n🔗 [View on SonarQube]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
+            COMMENT="## 🔒 SonarQube Security Analysis Report
+            🚨 **Security Vulnerabilities Detected**\n\nThe following security issues were identified in your code:\n\n| File Path                  | Line | Issue Description                  |\n|----------------------------|------|------------------------------------|\n$ISSUES\n\n📊 **Recommendation**: Please review and resolve these issues to enhance security. Consider using environment variables or a secrets manager for sensitive data.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
           else
-            COMMENT="### SonarQube Security Analysis Results\nNo security issues found. Good job! ✅\n\n🔗 [View on SonarQube]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
+            COMMENT="## 🔒 SonarQube Security Analysis Report\n\n✅ **No Security Issues Found**\n\nGreat job! No security vulnerabilities were detected in your code.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
           fi
           
           # Sử dụng jq để tạo JSON an toàn

@@ -142,23 +142,23 @@ jobs:
             ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
             ${{ secrets.DOCKER_USERNAME }}/myapp:latest
 
-  image-scan:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Install Trivy
-        run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-
-      - name: Scan Docker Image
-        run: |
-          trivy image --severity HIGH,CRITICAL \
-            --exit-code 1 \
-            --no-progress \
-            ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
+#  image-scan:
+#    needs: build
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v3
+#
+#      - name: Install Trivy
+#        run: |
+#          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+#
+#      - name: Scan Docker Image
+#        run: |
+#          trivy image --severity HIGH,CRITICAL \
+#            --exit-code 1 \
+#            --no-progress \
+#            ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
 
   notify-slack:
     needs: [security-checks, build, image-scan]

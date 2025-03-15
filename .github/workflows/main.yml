@@ -73,9 +73,15 @@ jobs:
           
           if [ -n "$ISSUES" ]; then
             COMMENT="## 🔒 SonarQube Security Analysis Report
-            🚨 **Security Vulnerabilities Detected**\n\nThe following security issues were identified in your code:\n\n| File Path                  | Line | Issue Description                  |\n|----------------------------|------|------------------------------------|\n$ISSUES\n\n📊 **Recommendation**: Please review and resolve these issues to enhance security. Consider using environment variables or a secrets manager for sensitive data.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
+            🚨 **Security Vulnerabilities Detected**
+            The following security issues were identified in your code: | File Path | Line | Issue Description                  
+            |----------------------------|------|------------------------------------|
+            $ISSUES
+            📊 **Recommendation**: Please review and resolve these issues to enhance security. Consider using environment variables or a secrets manager for sensitive data. 
+            🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
           else
-            COMMENT="## 🔒 SonarQube Security Analysis Report\n\n✅ **No Security Issues Found**\n\nGreat job! No security vulnerabilities were detected in your code.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
+            COMMENT="## 🔒 SonarQube Security Analysis Report
+            ✅ **No Security Issues Found**\n\nGreat job! No security vulnerabilities were detected in your code.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)"
           fi
           
           # Sử dụng jq để tạo JSON an toàn

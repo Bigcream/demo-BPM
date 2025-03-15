@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  pull-requests: write  # Cấp quyền ghi trên pull requests
+  issues: write
+
 jobs:
   security-checks:
     runs-on: ubuntu-latest
@@ -56,20 +60,6 @@ jobs:
             -Dsonar.tests=src/test \
             -Dsonar.test.inclusions=**/*Test*.java
 
-#      - name: Check SonarQube Quality Gate
-#        env:
-#          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-#          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-#        run: |
-#          # Chờ Quality Gate hoàn tất và kiểm tra trạng thái
-#          sleep 10  # Chờ một khoảng thời gian để SonarQube xử lý (có thể điều chỉnh)
-#          QUALITY_GATE_STATUS=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=my-spring-boot-project" | jq -r '.projectStatus.status')
-#          echo "Quality Gate Status: $QUALITY_GATE_STATUS"
-#          if [ "$QUALITY_GATE_STATUS" != "OK" ]; then
-#            echo "Quality Gate failed: $QUALITY_GATE_STATUS"
-#            exit 1
-#          fi
-
       - name: Post SonarQube Issues to Pull Request
         if: github.event_name == 'pull_request'
         env:
@@ -96,6 +86,21 @@ jobs:
               -d "{\"body\": \"$COMMENT\"}" \
               "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
           fi
+
+      - name: Check SonarQube Quality Gate
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          # Chờ Quality Gate hoàn tất và kiểm tra trạng thái
+          sleep 10  # Chờ một khoảng thời gian để SonarQube xử lý (có thể điều chỉnh)
+          QUALITY_GATE_STATUS=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=my-spring-boot-project" | jq -r '.projectStatus.status')
+          echo "Quality Gate Status: $QUALITY_GATE_STATUS"
+          if [ "$QUALITY_GATE_STATUS" != "OK" ]; then
+            echo "Quality Gate failed: $QUALITY_GATE_STATUS"
+            exit 1
+          fi
+
 
   build:
     needs: security-checks

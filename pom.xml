@@ -79,6 +79,13 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<!-- sonar-java-plugin phiên bản mới nhất -->
+		<dependency>
+			<groupId>org.sonarsource.java</groupId>
+			<artifactId>sonar-java-plugin</artifactId>
+			<version>8.10.0.38194</version>
+		</dependency>
 	</dependencies>
 
 	<build>

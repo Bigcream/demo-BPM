@@ -11,6 +11,7 @@ public class DemoBmpApplication {
 
 	public static void main(String[] args) {
 		SpringApplication.run(DemoBmpApplication.class, args);
+		System.out.println("started");
 	}
 
 }

@@ -202,7 +202,7 @@ jobs:
 #          path: zap_report.html
 
   notify-slack:
-    needs: [security-checks, build, image-scan, deploy-simulation, dast-scan]
+    needs: [security-checks, build, image-scan, deploy, dast-scan]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -213,7 +213,7 @@ jobs:
           SECURITY_STATUS="${{ needs.security-checks.result }}"
           BUILD_STATUS="${{ needs.build.result }}"
           SCAN_STATUS="${{ needs.image-scan.result }}"
-          DEPLOY_STATUS="${{ needs.deploy-simulation.result }}"
+          DEPLOY_STATUS="${{ needs.deploy.result }}"
           DAST_STATUS="${{ needs.dast-scan.result }}"
 
           DETAILS=""

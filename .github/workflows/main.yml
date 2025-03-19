@@ -11,35 +11,35 @@ permissions:
   issues: write
 
 jobs:
-dast-scan:
-  needs: deploy-simulation
-  runs-on: ubuntu-latest
-  steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+  dast-scan:
+    needs: deploy-simulation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Run OWASP ZAP DAST Scan
-      run: |
-        docker run -t owasp/zap2docker-stable zap-baseline.py \
-          -t http://localhost:8080 \
-          -r zap_report.html \
-          --autooff || echo "DAST scan completed with issues, continuing pipeline."
+      - name: Run OWASP ZAP DAST Scan
+        run: |
+          docker run -t owasp/zap2docker-stable zap-baseline.py \
+            -t http://localhost:8080 \
+            -r zap_report.html \
+            --autooff || echo "DAST scan completed with issues, continuing pipeline."
 
-    - name: Check if ZAP Report exists
-      run: |
-        if [ -f zap_report.html ]; then
-          echo "ZAP report generated successfully."
-        else
-          echo "Error: zap_report.html was not generated."
-          exit 1
-        fi
+      - name: Check if ZAP Report exists
+        run: |
+          if [ -f zap_report.html ]; then
+            echo "ZAP report generated successfully."
+          else
+            echo "Error: zap_report.html was not generated."
+            exit 1
+          fi
 
-    - name: Upload ZAP Report
-      uses: actions/upload-artifact@v3
-      with:
-        name: zap-dast-report
-        path: zap_report.html
-      if: success()  # Chỉ upload nếu các bước trước thành công
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: zap-dast-report
+          path: zap_report.html
+        if: success()  # Chỉ upload nếu các bước trước thành công
 #  security-checks:
 #    runs-on: ubuntu-latest
 #    steps:

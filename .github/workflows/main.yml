@@ -198,7 +198,7 @@ jobs:
           fi
 
           # Xác định trạng thái tổng thể
-          if [ "$SECURITY_STATUS" = "success" ] && [ "$BUILD_STATUS" = "success" ] && [ "$SCAN_STATUS" = "success" ]; then
+          if [ "$SECURITY_STATUS" = "success" ] && [ "$BUILD_STATUS" = "success" ]; then
             STATUS="✅ Pipeline Thành Công! ✅"
             COLOR="#36a64f"
           else

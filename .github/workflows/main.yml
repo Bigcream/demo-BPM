@@ -95,6 +95,11 @@ jobs:
               -d "$JSON_PAYLOAD" \
               "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
           fi
+      - name: Run Dependency Security Scan (SCA)
+        id: sca
+        uses: snyk/actions/maven@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
 
   build:

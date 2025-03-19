@@ -29,7 +29,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: zap-dast-report
-          path: zap_report.html
+          path: ./zap_report.html
 #  security-checks:
 #    runs-on: ubuntu-latest
 #    steps:

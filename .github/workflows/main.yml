@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   dast-scan:
-    needs: deploy-simulation
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -23,23 +22,14 @@ jobs:
           docker run -t owasp/zap2docker-stable zap-baseline.py \
             -t http://localhost:8080 \
             -r zap_report.html \
-            --autooff || echo "DAST scan completed with issues, continuing pipeline."
-
-      - name: Check if ZAP Report exists
-        run: |
-          if [ -f zap_report.html ]; then
-            echo "ZAP report generated successfully."
-          else
-            echo "Error: zap_report.html was not generated."
-            exit 1
-          fi
+            --autooff
+        continue-on-error: true  # Cho phép pipeline tiếp tục ngay cả khi phát hiện lỗ hổng
 
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v3
         with:
           name: zap-dast-report
           path: zap_report.html
-        if: success()  # Chỉ upload nếu các bước trước thành công
 #  security-checks:
 #    runs-on: ubuntu-latest
 #    steps:

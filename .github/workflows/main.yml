@@ -11,11 +11,11 @@ permissions:
   issues: write
 
 jobs:
-  dast-scan:
+  zap-scan:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run OWASP ZAP DAST Scan
         run: |
@@ -23,18 +23,26 @@ jobs:
             -t http://localhost:8080 \
             -r zap_report.html \
             --autooff
-        continue-on-error: true  # Cho phép pipeline tiếp tục ngay cả khi phát hiện lỗ hổng
+        continue-on-error: true
 
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
-          name: zap-dast-report
+          name: zap-report
           path: zap_report.html
-      - name: Download build artifact
+
+  verify-report:
+    runs-on: ubuntu-latest
+    needs: zap-scan  # Đảm bảo bước này chạy sau zap-scan
+    steps:
+      - name: Download ZAP Report
         uses: actions/download-artifact@v4
         with:
-          name: build-output
-          path: zap_report.html
+          name: zap-report
+          path: ./reports/
+
+      - name: Display Report
+        run: cat ./reports/zap_report.html
 #  security-checks:
 #    runs-on: ubuntu-latest
 #    steps:

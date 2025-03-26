@@ -20,9 +20,14 @@ jobs:
       - name: Run OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
         with:
-          target: 'https://vnexpress.net/'  # Replace with your web app URL
-          token: ${{ secrets.GITHUB_TOKEN }}   # Automatically provided by GitHub
-          cmd_options: '-a'
+          target: 'http://thecybersaviours.com/how-to-find-out-if-a-website-is-vulnerable-to-sql-injection'  # Thay bằng URL của bạn
+          cmd_options: '-r zap-report.html'  # Lưu báo cáo thành file HTML
+
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-scan-report
+          path: zap-report.html
 #  security-checks:
 #    runs-on: ubuntu-latest
 #    steps:

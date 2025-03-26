@@ -11,7 +11,7 @@ permissions:
   issues: write
 
 jobs:
-  zap_scan:
+  zap-scan-sec:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

@@ -21,13 +21,13 @@ jobs:
         uses: zaproxy/action-baseline@v0.12.0
         with:
           target: 'http://testphp.vulnweb.com'  # Dùng URL công khai để thử
-          cmd_options: '-r zap-report.html'     # Tạo báo cáo
+          cmd_options: '-r report_html.html'     # Tạo báo cáo
 
       - name: Debug ZAP Output
         run: |
           echo "Current directory: $(pwd)"
           ls -la  # Kiểm tra file có được tạo không
-          if [ -f zap-report.html ]; then
+          if [ -f report_html.html ]; then
             echo "File exists! Contents:"
             cat report_html.html
           else

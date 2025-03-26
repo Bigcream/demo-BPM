@@ -38,7 +38,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()  # Chạy bước này ngay cả khi có lỗi trước đó
         with:
-          name: zap-scan-report
+          name: report
           path: report_html.html
 #  security-checks:
 #    runs-on: ubuntu-latest

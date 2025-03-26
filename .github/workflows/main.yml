@@ -29,7 +29,7 @@ jobs:
           ls -la  # Kiểm tra file có được tạo không
           if [ -f zap-report.html ]; then
             echo "File exists! Contents:"
-            cat zap-report.html
+            cat report_html.html
           else
             echo "File zap-report.html not found"
           fi
@@ -39,7 +39,7 @@ jobs:
         if: always()  # Chạy bước này ngay cả khi có lỗi trước đó
         with:
           name: zap-scan-report
-          path: zap-report.html
+          path: report_html.html
 #  security-checks:
 #    runs-on: ubuntu-latest
 #    steps:

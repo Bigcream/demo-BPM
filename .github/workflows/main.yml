@@ -22,25 +22,6 @@ jobs:
         with:
           target: 'http://testphp.vulnweb.com'  # Public URL for testing
           cmd_options: '-r report_html.html'    # Generate report
-
-      - name: Debug ZAP Output
-        run: |
-          echo "Current directory: $(pwd)"
-          ls -la  # Check if the file was created
-          if [ -f report_html.html ]; then
-            echo "File exists! Contents:"
-            cat report_html.html
-          else
-            echo "File report_html.html not found"
-          fi
-
-      - name: Upload ZAP Report
-        uses: actions/upload-artifact@v4
-        if: always()  # Run this step even if previous steps fail
-        with:
-          name: zap-report  # Use a valid, descriptive name without underscores if preferred
-          path: report_html.html
-          retention-days: 7  # Optional: Set retention period for the artifact
 #  security-checks:
 #    runs-on: ubuntu-latest
 #    steps:

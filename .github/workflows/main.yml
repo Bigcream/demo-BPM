@@ -28,12 +28,6 @@ jobs:
             echo "Không tìm thấy mvnw, sẽ sử dụng mvn thay thế"
           fi
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
       - name: Cache Maven dependencies
         uses: actions/cache@v3
         with:
@@ -45,11 +39,9 @@ jobs:
       - name: Run SonarQube Scan (SAST)
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}  # Ví dụ: http://your-sonarqube-server:9000
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
-          # Kiểm tra phiên bản Java
           java -version
-          # Build và chạy SonarQube scan
           mvn clean install -DskipTests
           mvn sonar:sonar \
             -Dsonar.host.url=$SONAR_HOST_URL \
@@ -68,27 +60,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           sudo apt-get update && sudo apt-get install -y jq
-          # Chỉ lấy các issue loại VULNERABILITY (bảo mật) và định dạng cho bảng Markdown
           ISSUES=$(curl -u ${{ secrets.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=my-spring-boot-project&resolved=false&types=VULNERABILITY" | jq -r '.issues[] | "| \(.component) | \(.line) | \(.message) |"')
-          
+
           if [ -n "$ISSUES" ]; then
-            # Sử dụng echo -e để đảm bảo ký tự xuống dòng được xử lý đúng
             COMMENT=$(echo -e "## 🔒 SonarQube Security Analysis Report\n\n🚨 **Security Vulnerabilities Detected**\n\nThe following security issues were identified in your code:\n\n| File Path                  | Line | Issue Description                  |\n|----------------------------|------|------------------------------------|\n$ISSUES\n\n📊 **Recommendation**: Please review and resolve these issues to enhance security.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)")
-          
-            # Đăng comment lên Pull Request
             JSON_PAYLOAD=$(jq -n --arg body "$COMMENT" '{body: $body}')
             curl -X POST -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
               -d "$JSON_PAYLOAD" \
               "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
-          
-            # Dừng pipeline với mã lỗi
             echo "Security vulnerabilities detected. Stopping pipeline."
             exit 1
           else
             COMMENT=$(echo -e "## 🔒 SonarQube Security Analysis Report\n\n✅ **No Security Issues Found**\n\nGreat job! No security vulnerabilities were detected in your code.\n\n🔗 **View Full Report on SonarQube**: [Click Here]($SONAR_HOST_URL/dashboard?id=my-spring-boot-project)")
-          
-            # Đăng comment lên Pull Request
             JSON_PAYLOAD=$(jq -n --arg body "$COMMENT" '{body: $body}')
             curl -X POST -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
@@ -96,6 +80,11 @@ jobs:
               "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
           fi
 
+      - name: Run Dependency Security Scan (SCA)
+        id: sca
+        uses: snyk/actions/maven@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
   build:
     needs: security-checks
@@ -142,26 +131,47 @@ jobs:
             ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
             ${{ secrets.DOCKER_USERNAME }}/myapp:latest
 
-#  image-scan:
-#    needs: build
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout code
-#        uses: actions/checkout@v3
-#
-#      - name: Install Trivy
-#        run: |
-#          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-#
-#      - name: Scan Docker Image
-#        run: |
-#          trivy image --severity HIGH,CRITICAL \
-#            --exit-code 1 \
-#            --no-progress \
-#            ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
+  image-scan:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Scan Docker Image
+        run: |
+          trivy image --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --no-progress \
+            ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
+        continue-on-error: true
+
+  deploy:
+    needs: image-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Staging
+        run: echo "Deploying application..."
+
+  zap-scan-sec:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: 'http://testphp.vulnweb.com'  # Public URL for testing
+          cmd_options: '-r report_html.html'    # Generate report
 
   notify-slack:
-    needs: [security-checks, build]
+    needs: [security-checks, build, image-scan, deploy, zap-scan-sec]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -169,26 +179,50 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          # Xác định trạng thái của từng job
           SECURITY_STATUS="${{ needs.security-checks.result }}"
           BUILD_STATUS="${{ needs.build.result }}"
           SCAN_STATUS="${{ needs.image-scan.result }}"
+          DEPLOY_STATUS="${{ needs.deploy.result }}"
+          DAST_STATUS="${{ needs.zap-scan-sec.result }}"
 
-          # Tạo thông báo chi tiết
           DETAILS=""
           if [ "$SECURITY_STATUS" == "failure" ]; then
             DETAILS="$DETAILS\n- *Kiểm tra bảo mật (SonarQube)*: Thất bại ❌"
+          elif [ "$SECURITY_STATUS" == "skipped" ]; then
+            DETAILS="$DETAILS\n- *Kiểm tra bảo mật (SonarQube)*: Bỏ qua ⏩"
           else
             DETAILS="$DETAILS\n- *Kiểm tra bảo mật (SonarQube)*: Thành công ✅"
           fi
           if [ "$BUILD_STATUS" == "failure" ]; then
             DETAILS="$DETAILS\n- *Xây dựng và kiểm thử*: Thất bại ❌"
+          elif [ "$BUILD_STATUS" == "skipped" ]; then
+            DETAILS="$DETAILS\n- *Xây dựng và kiểm thử*: Bỏ qua ⏩"
           else
             DETAILS="$DETAILS\n- *Xây dựng và kiểm thử*: Thành công ✅"
           fi
+          if [ "$SCAN_STATUS" == "failure" ]; then
+            DETAILS="$DETAILS\n- *Kiểm tra Docker Image*: Thất bại ❌"
+          elif [ "$SCAN_STATUS" == "skipped" ]; then
+            DETAILS="$DETAILS\n- *Kiểm tra Docker Image*: Bỏ qua ⏩"
+          else
+            DETAILS="$DETAILS\n- *Kiểm tra Docker Image*: Thành công ✅"
+          fi
+          if [ "$DEPLOY_STATUS" == "failure" ]; then
+            DETAILS="$DETAILS\n- *Giả lập triển khai*: Thất bại ❌"
+          elif [ "$DEPLOY_STATUS" == "skipped" ]; then
+            DETAILS="$DETAILS\n- *Giả lập triển khai*: Bỏ qua ⏩"
+          else
+            DETAILS="$DETAILS\n- *Giả lập triển khai*: Thành công ✅"
+          fi
+          if [ "$DAST_STATUS" == "failure" ]; then
+            DETAILS="$DETAILS\n- *Kiểm tra DAST (OWASP ZAP)*: Thất bại ❌"
+          elif [ "$DAST_STATUS" == "skipped" ]; then
+            DETAILS="$DETAILS\n- *Kiểm tra DAST (OWASP ZAP)*: Bỏ qua ⏩"
+          else
+            DETAILS="$DETAILS\n- *Kiểm tra DAST (OWASP ZAP)*: Thành công ✅"
+          fi
 
-          # Xác định trạng thái tổng thể
-          if [ "$SECURITY_STATUS" = "success" ] && [ "$BUILD_STATUS" = "success" ]; then
+          if [ "$SECURITY_STATUS" = "success" ] && [ "$BUILD_STATUS" = "success" ] && [ "$DEPLOY_STATUS" = "success" ]; then
             STATUS="✅ Pipeline Thành Công! ✅"
             COLOR="#36a64f"
           else
@@ -196,11 +230,10 @@ jobs:
             COLOR="#ff0000"
           fi
 
-          # Gửi thông báo tới Slack
           curl -X POST -H 'Content-type: application/json' --data "{
             \"text\": \"$STATUS\",
             \"attachments\": [{
-              \"color\": \"$COLOR\", 
+              \"color\": \"$COLOR\",
               \"fields\": [
                 {\"title\": \"Chi tiết\", \"value\": \"$DETAILS\", \"short\": false},
                 {\"title\": \"Repository\", \"value\": \"${{ github.repository }}\", \"short\": true},

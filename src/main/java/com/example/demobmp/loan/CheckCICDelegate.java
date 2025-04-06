@@ -15,5 +15,6 @@ public class CheckCICDelegate implements JavaDelegate {
         boolean approved = cicScore > 600;  // Điều kiện phê duyệt
         execution.setVariable("cicApproved", approved);
         System.out.println("Checked CIC Score: " + cicScore + " | Approved: " + approved);
+        System.out.println("test new sonar rule");
     }
 }

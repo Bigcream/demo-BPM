@@ -10,10 +10,12 @@ import java.util.Random;
 public class CheckCICDelegate implements JavaDelegate {
     @Override
     public void execute(DelegateExecution execution) {
-        int cicScore = new Random().nextInt(900);  // Giả lập điểm CIC ngẫu nhiên
-//        int cicScore = new SecureRandom().nextInt();
+        int cicScore = new SecureRandom().nextInt();
+//        int cicScore = new Random().nextInt(900);  // Giả lập điểm CIC ngẫu nhiên
         boolean approved = cicScore > 600;  // Điều kiện phê duyệt
         execution.setVariable("cicApproved", approved);
+        System.out.println("abc");
         System.out.println("Checked CIC Score: " + cicScore + " | Approved: " + approved);
+        System.out.println("test new sonar rule");
     }
 }
